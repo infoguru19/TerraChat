@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TerraChat — Terraform AI Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #21262d;
+      --accent:    #7ee787;
+      --accent2:   #58a6ff;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --user-bg:   #1c2128;
+      --ai-bg:     #161b22;
+      --danger:    #f85149;
+      --mono:      'IBM Plex Mono', monospace;
+      --sans:      'IBM Plex Sans', sans-serif;
+    }
+ 
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+ 
+    /* ── Layout ── */
+    .app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: 100vh;
+      height: 100vh;
+    }
+ 
+    /* ── Sidebar ── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 16px 12px;
+      gap: 8px;
+      overflow-y: auto;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; color: #0d1117; font-weight: 700;
+      font-family: var(--mono);
+      flex-shrink: 0;
+    }
+    .logo-text {
+      font-size: 15px; font-weight: 600; color: var(--text);
+      letter-spacing: 0.02em;
+    }
+    .logo-sub {
+      font-size: 10px; color: var(--muted); font-family: var(--mono);
+      letter-spacing: 0.05em; text-transform: uppercase;
+    }
+ 
+    .new-chat-btn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 12px;
+      border-radius: 6px;
+      border: 1px dashed var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: var(--sans);
+    }
+    .new-chat-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(126,231,135,0.05); }
+ 
+    .sidebar-label {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); padding: 8px 8px 4px; font-family: var(--mono);
+    }
+ 
+    .topic-chip {
+      padding: 7px 10px; border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted); font-size: 12px;
+      cursor: pointer; text-align: left;
+      transition: all 0.15s;
+      font-family: var(--sans);
+    }
+    .topic-chip:hover { background: var(--user-bg); color: var(--text); border-color: var(--border); }
+    .topic-chip .chip-provider {
+      display: block; font-size: 10px; color: var(--muted);
+      font-family: var(--mono); margin-top: 2px;
+    }
+ 
+    .sidebar-footer {
+      margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border);
+      font-size: 11px; color: var(--muted); line-height: 1.5;
+    }
+    .sidebar-footer a { color: var(--accent2); text-decoration: none; }
+    .sidebar-footer a:hover { text-decoration: underline; }
+ 
+    /* ── Main ── */
+    .main {
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    }
+ 
+    .topbar {
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    .topbar-title { font-size: 14px; font-weight: 500; color: var(--text); }
+    .topbar-meta { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+ 
+    .provider-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 20px;
+      border: 1px solid var(--border);
+      font-size: 11px; font-family: var(--mono);
+      color: var(--muted);
+    }
+    .provider-badge .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+ 
+    /* ── Messages ── */
+    .messages {
+      flex: 1; overflow-y: auto; padding: 24px;
+      display: flex; flex-direction: column; gap: 0;
+      scroll-behavior: smooth;
+    }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+ 
+    /* Empty state */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; padding: 40px; text-align: center;
+    }
+    .empty-icon {
+      width: 56px; height: 56px; border-radius: 12px;
+      background: rgba(126,231,135,0.1);
+      border: 1px solid rgba(126,231,135,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+    }
+    .empty-title { font-size: 18px; font-weight: 600; color: var(--text); }
+    .empty-sub { font-size: 13px; color: var(--muted); max-width: 380px; }
+ 
+    .starter-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      margin-top: 16px; width: 100%; max-width: 560px;
+    }
+    .starter-card {
+      padding: 12px 14px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface);
+      cursor: pointer; text-align: left; transition: all 0.15s;
+      font-family: var(--sans);
+    }
+    .starter-card:hover { border-color: var(--accent); background: rgba(126,231,135,0.05); }
+    .starter-card .sc-title { font-size: 13px; font-weight: 500; color: var(--text); }
+    .starter-card .sc-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+ 
+    /* Message rows */
+    .msg-row {
+      display: flex; gap: 14px; padding: 16px 0;
+      border-bottom: 1px solid rgba(33,38,45,0.6);
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+    .msg-row:last-child { border-bottom: none; }
+ 
+    .msg-avatar {
+      width: 28px; height: 28px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; flex-shrink: 0;
+      font-family: var(--mono);
+    }
+    .msg-avatar.user { background: var(--accent2); color: #0d1117; }
+    .msg-avatar.ai   { background: var(--accent);  color: #0d1117; }
+ 
+    .msg-body { flex: 1; min-width: 0; }
+    .msg-meta {
+      font-size: 11px; color: var(--muted); font-family: var(--mono);
+      margin-bottom: 6px;
+    }
+    .msg-content { font-size: 14px; line-height: 1.7; color: var(--text); }
+    .msg-content p { margin-bottom: 10px; }
+    .msg-content p:last-child { margin-bottom: 0; }
+ 
+    /* Code blocks */
+    .msg-content pre {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 12px 0;
+      position: relative;
+    }
+    .msg-content pre code {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 14px;
+      background: var(--border);
+      border-radius: 8px 8px 0 0;
+      font-size: 11px; font-family: var(--mono); color: var(--muted);
+      margin-top: 12px;
+    }
+    .code-header + pre {
+      margin-top: 0; border-top: none;
+      border-radius: 0 0 8px 8px;
+    }
+    .copy-btn {
+      background: none; border: none; color: var(--muted);
+      cursor: pointer; font-size: 11px; font-family: var(--mono);
+      padding: 2px 6px; border-radius: 4px; transition: all 0.15s;
+    }
+    .copy-btn:hover { background: var(--surface); color: var(--text); }
+ 
+    /* Inline code */
+    .msg-content code:not(pre code) {
+      background: rgba(110,118,129,0.2);
+      padding: 1px 5px; border-radius: 4px;
+      font-family: var(--mono); font-size: 12px;
+      color: #79c0ff;
+    }
+ 
+    /* Bold, headings */
+    .msg-content strong { color: var(--accent); font-weight: 600; }
+    .msg-content h3 { font-size: 15px; font-weight: 600; margin: 14px 0 6px; color: var(--text); }
+    .msg-content h4 { font-size: 13px; font-weight: 600; margin: 12px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--mono); }
+    .msg-content ul { padding-left: 20px; margin-bottom: 10px; }
+    .msg-content li { margin-bottom: 4px; }
+    .msg-content a { color: var(--accent2); text-decoration: none; }
+    .msg-content a:hover { text-decoration: underline; }
+ 
+    /* Note/tip box */
+    .msg-note {
+      background: rgba(88,166,255,0.08);
+      border-left: 3px solid var(--accent2);
+      padding: 10px 14px; border-radius: 0 6px 6px 0;
+      font-size: 13px; color: var(--muted); margin: 10px 0;
+    }
+ 
+    /* Thinking indicator */
+    .thinking {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--muted); padding: 16px 0;
+      font-family: var(--mono);
+    }
+    .thinking-dots span {
+      display: inline-block; width: 5px; height: 5px;
+      border-radius: 50%; background: var(--accent);
+      animation: blink 1.2s infinite;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+ 
+    /* ── Input area ── */
+    .input-area {
+      padding: 16px 24px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    .input-wrap {
+      display: flex; align-items: flex-end; gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      transition: border-color 0.15s;
+    }
+    .input-wrap:focus-within { border-color: rgba(126,231,135,0.4); }
+ 
+    textarea {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-family: var(--sans); font-size: 14px;
+      line-height: 1.5; resize: none; min-height: 22px; max-height: 160px;
+    }
+    textarea::placeholder { color: var(--muted); }
+ 
+    .send-btn {
+      width: 32px; height: 32px; border-radius: 6px;
+      background: var(--accent); border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .send-btn:hover:not(:disabled) { background: #a5f3a7; }
+    .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+    .send-btn svg { width: 14px; height: 14px; }
+ 
+    .input-hint {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 8px; font-size: 11px; color: var(--muted); font-family: var(--mono);
+    }
+ 
+    /* Error toast */
+    .error-bar {
+      background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3);
+      color: var(--danger); padding: 10px 16px; border-radius: 6px;
+      font-size: 13px; margin-bottom: 10px; display: none;
+    }
+ 
+    /* ── Responsive ── */
+    @media (max-width: 700px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .messages { padding: 16px; }
+      .input-area { padding: 12px 16px 16px; }
+      .starter-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+ 
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">tf</div>
+      <div>
+        <div class="logo-text">TerraChat</div>
+        <div class="logo-sub">Terraform AI</div>
+      </div>
+    </div>
+ 
+    <button class="new-chat-btn" onclick="newChat()">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 1v14M1 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      New conversation
+    </button>
+ 
+    <div class="sidebar-label">Quick topics</div>
+ 
+    <button class="topic-chip" onclick="sendStarter('How do I write a basic Terraform provider configuration for AWS?')">
+      Provider config
+      <span class="chip-provider">aws · basics</span>
+    </button>
+    <button class="topic-chip" onclick="sendStarter('Explain Terraform state files and remote backends.')">
+      State & backends
+      <span class="chip-provider">core concept</span>
+    </button>
+    <button class="topic-chip" onclick="sendStarter('Show me a Terraform example to create an Azure Virtual Machine.')">
+      Azure VM example
+      <span class="chip-provider">azure · compute</span>
+    </button>
+    <button class="topic-chip" onclick="sendStarter('How do I use Terraform modules and what are best practices?')">
+      Modules
+      <span class="chip-provider">structure</span>
+    </button>
+    <button class="topic-chip" onclick="sendStarter('Create a GCP Cloud Run service using Terraform.')">
+      GCP Cloud Run
+      <span class="chip-provider">gcp · serverless</span>
+    </button>
+    <button class="topic-chip" onclick="sendStarter('What is terraform plan vs apply vs destroy?')">
+      CLI commands
+      <span class="chip-provider">workflow</span>
+    </button>
+    <button class="topic-chip" onclick="sendStarter('How do Terraform variables and outputs work?')">
+      Variables & outputs
+      <span class="chip-provider">syntax</span>
+    </button>
+    <button class="topic-chip" onclick="sendStarter('Explain Terraform workspace and when to use it.')">
+      Workspaces
+      <span class="chip-provider">environments</span>
+    </button>
+ 
+    <div class="sidebar-footer">
+      Answers sourced from official<br>
+      <a href="https://developer.hashicorp.com/terraform/docs" target="_blank">Terraform Docs</a> ·
+      <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank">AWS</a> ·
+      <a href="https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs" target="_blank">Azure</a> ·
+      <a href="https://registry.terraform.io/providers/hashicorp/google/latest/docs" target="_blank">GCP</a>
+    </div>
+  </aside>
+ 
+  <!-- ── Main ── -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title">Terraform Assistant</div>
+        <div class="topbar-meta">Ask anything about Terraform, AWS · Azure · GCP</div>
+      </div>
+      <div class="provider-badge">
+        <span class="dot"></span>
+        claude-sonnet-4
+      </div>
+    </div>
+ 
+    <!-- Messages container -->
+    <div class="messages" id="messages">
+      <!-- Empty state shown by default -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">⬡</div>
+        <div class="empty-title">What do you want to build?</div>
+        <div class="empty-sub">Ask a Terraform question or request an example. Supports AWS, Azure, and GCP providers.</div>
+        <div class="starter-grid">
+          <button class="starter-card" onclick="sendStarter('Show me a complete Terraform example to create an AWS S3 bucket with versioning and encryption.')">
+            <div class="sc-title">S3 bucket with versioning</div>
+            <div class="sc-sub">aws · storage</div>
+          </button>
+          <button class="starter-card" onclick="sendStarter('How do I manage Terraform remote state in AWS S3 with DynamoDB locking?')">
+            <div class="sc-title">Remote state on S3</div>
+            <div class="sc-sub">aws · state management</div>
+          </button>
+          <button class="starter-card" onclick="sendStarter('Give me a Terraform example for an Azure Resource Group with a Storage Account.')">
+            <div class="sc-title">Azure Resource Group</div>
+            <div class="sc-sub">azure · basics</div>
+          </button>
+          <button class="starter-card" onclick="sendStarter('How do I provision a GCP VPC network and subnet with Terraform?')">
+            <div class="sc-title">GCP VPC network</div>
+            <div class="sc-sub">gcp · networking</div>
+          </button>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Input area -->
+    <div class="input-area">
+      <div class="error-bar" id="errorBar"></div>
+      <div class="input-wrap">
+        <textarea
+          id="inputBox"
+          placeholder="Ask about Terraform — resources, providers, syntax, examples…"
+          rows="1"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send">
+          <svg viewBox="0 0 16 16" fill="none" stroke="#0d1117" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 3L3 8l4 2 2 4 4-11z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="input-hint">
+        <span>Enter to send · Shift+Enter for new line</span>
+        <span>Terraform only</span>
+      </div>
+    </div>
+  </main>
+</div>
+ 
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const history = [];   // { role: "user"|"assistant", content: string }
+let busy = false;
+ 
+const SYSTEM_PROMPT = `You are TerraChat, a focused Terraform assistant. You ONLY answer questions about Terraform and infrastructure-as-code.
+ 
+Scope: Terraform core concepts, HCL syntax, providers (AWS, Azure, GCP), modules, state, workspaces, CLI commands, best practices, and real working code examples.
+ 
+Rules:
+- Answer ONLY Terraform-related questions. If asked anything outside Terraform/IaC, politely decline and redirect.
+- Reference official documentation when relevant: Terraform Docs (developer.hashicorp.com/terraform), AWS Provider (registry.terraform.io/providers/hashicorp/aws), AzureRM Provider (registry.terraform.io/providers/hashicorp/azurerm), Google Provider (registry.terraform.io/providers/hashicorp/google).
+- Always provide working, copy-paste-ready HCL code examples when a user asks for one.
+- Code blocks should be fenced with triple backticks and language tag (e.g. \`\`\`hcl).
+- Be concise — no fluff, no unnecessary preamble. Get to the answer fast.
+- Use plain language. No marketing speak.
+- If a concept needs an example to be clear, include one without being asked.
+- When showing provider configurations, always include the required_providers block.
+- For AWS examples use region = "us-east-1" as default unless specified.
+- For Azure examples use location = "East US" as default unless specified.
+- For GCP examples use region = "us-central1" as default unless specified.
+ 
+Format: Use markdown. Code blocks for HCL. Bold for important terms. Short headings only when needed. Bullet points for lists.`;
+ 
+// ── DOM helpers ────────────────────────────────────────────────────────────
+const $messages = document.getElementById('messages');
+const $input    = document.getElementById('inputBox');
+const $sendBtn  = document.getElementById('sendBtn');
+const $empty    = document.getElementById('emptyState');
+const $errorBar = document.getElementById('errorBar');
+ 
+function hideEmpty() {
+  if ($empty) $empty.remove();
+}
+ 
+function showError(msg) {
+  $errorBar.textContent = msg;
+  $errorBar.style.display = 'block';
+  setTimeout(() => { $errorBar.style.display = 'none'; }, 5000);
+}
+ 
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+ 
+function scrollToBottom() {
+  $messages.scrollTop = $messages.scrollHeight;
+}
+ 
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+ 
+// ── Render markdown (lightweight) ─────────────────────────────────────────
+function renderMarkdown(text) {
+  // Code blocks with optional language
+  text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+    const label = lang || 'hcl';
+    const id = 'cb_' + Math.random().toString(36).slice(2);
+    return `<div class="code-header"><span>${label}</span><button class="copy-btn" onclick="copyCode('${id}')">copy</button></div><pre id="${id}"><code>${escapeHtml(code.trim())}</code></pre>`;
+  });
+  // Inline code
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // H3
+  text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  // H4
+  text = text.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  // H2
+  text = text.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+  // Unordered list
+  text = text.replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>');
+  text = text.replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`);
+  // Links
+  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // Paragraphs
+  const blocks = text.split(/\n{2,}/);
+  return blocks.map(b => {
+    b = b.trim();
+    if (!b) return '';
+    if (/^<(h[234]|ul|pre|div)/.test(b)) return b;
+    return `<p>${b.replace(/\n/g, '<br>')}</p>`;
+  }).join('\n');
+}
+ 
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+ 
+function copyCode(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).catch(() => {});
+  const btn = el.previousSibling?.querySelector?.('.copy-btn');
+  if (btn) { btn.textContent = 'copied!'; setTimeout(() => btn.textContent = 'copy', 1500); }
+}
+ 
+// ── Append message ─────────────────────────────────────────────────────────
+function appendMessage(role, content) {
+  const row = document.createElement('div');
+  row.className = 'msg-row';
+ 
+  const avatarText = role === 'user' ? 'U' : 'tf';
+  const avatarClass = role === 'user' ? 'user' : 'ai';
+  const label = role === 'user' ? 'You' : 'TerraChat';
+ 
+  row.innerHTML = `
+    <div class="msg-avatar ${avatarClass}">${avatarText}</div>
+    <div class="msg-body">
+      <div class="msg-meta">${label}</div>
+      <div class="msg-content">${role === 'user' ? escapeHtml(content).replace(/\n/g,'<br>') : renderMarkdown(content)}</div>
+    </div>
+  `;
+  $messages.appendChild(row);
+  scrollToBottom();
+  return row;
+}
+ 
+function appendThinking() {
+  const row = document.createElement('div');
+  row.className = 'thinking';
+  row.id = 'thinkingRow';
+  row.innerHTML = `
+    <div class="msg-avatar ai" style="width:28px;height:28px;flex-shrink:0;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;background:var(--accent);color:#0d1117;border-radius:6px;font-family:var(--mono)">tf</div>
+    <span>Thinking</span>
+    <div class="thinking-dots"><span></span><span></span><span></span></div>
+  `;
+  $messages.appendChild(row);
+  scrollToBottom();
+}
+ 
+function removeThinking() {
+  const el = document.getElementById('thinkingRow');
+  if (el) el.remove();
+}
+ 
+// ── Core send ──────────────────────────────────────────────────────────────
+async function sendMessage() {
+  const text = $input.value.trim();
+  if (!text || busy) return;
+ 
+  hideEmpty();
+  busy = true;
+  $sendBtn.disabled = true;
+  $input.value = '';
+  $input.style.height = 'auto';
+ 
+  history.push({ role: 'user', content: text });
+  appendMessage('user', text);
+  appendThinking();
+ 
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT,
+        messages: history.map(m => ({ role: m.role, content: m.content }))
+      })
+    });
+ 
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status}`);
+    }
+ 
+    const data = await res.json();
+    const reply = data.content?.find(b => b.type === 'text')?.text || 'No response.';
+ 
+    removeThinking();
+    history.push({ role: 'assistant', content: reply });
+    appendMessage('assistant', reply);
+ 
+  } catch (err) {
+    removeThinking();
+    showError('Error: ' + err.message);
+    // Remove the last user message from history if failed
+    history.pop();
+    appendMessage('assistant', `Sorry, something went wrong: \`${err.message}\`\n\nPlease check your API key or try again.`);
+  } finally {
+    busy = false;
+    $sendBtn.disabled = false;
+    $input.focus();
+  }
+}
+ 
+function sendStarter(text) {
+  $input.value = text;
+  autoResize($input);
+  sendMessage();
+}
+ 
+function newChat() {
+  history.length = 0;
+  $messages.innerHTML = '';
+  // Re-add empty state
+  const es = document.createElement('div');
+  es.className = 'empty-state';
+  es.id = 'emptyState';
+  es.innerHTML = `
+    <div class="empty-icon">⬡</div>
+    <div class="empty-title">What do you want to build?</div>
+    <div class="empty-sub">Ask a Terraform question or request an example. Supports AWS, Azure, and GCP providers.</div>
+    <div class="starter-grid">
+      <button class="starter-card" onclick="sendStarter('Show me a complete Terraform example to create an AWS S3 bucket with versioning and encryption.')">
+        <div class="sc-title">S3 bucket with versioning</div><div class="sc-sub">aws · storage</div>
+      </button>
+      <button class="starter-card" onclick="sendStarter('How do I manage Terraform remote state in AWS S3 with DynamoDB locking?')">
+        <div class="sc-title">Remote state on S3</div><div class="sc-sub">aws · state management</div>
+      </button>
+      <button class="starter-card" onclick="sendStarter('Give me a Terraform example for an Azure Resource Group with a Storage Account.')">
+        <div class="sc-title">Azure Resource Group</div><div class="sc-sub">azure · basics</div>
+      </button>
+      <button class="starter-card" onclick="sendStarter('How do I provision a GCP VPC network and subnet with Terraform?')">
+        <div class="sc-title">GCP VPC network</div><div class="sc-sub">gcp · networking</div>
+      </button>
+    </div>
+  `;
+  $messages.appendChild(es);
+  $input.focus();
+}
+</script>
+</body>
+</html>
